@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: market-data-publisher
+  mvc:
+    problemdetails:
+      enabled: true
+  batch:
+    job:
+      enabled: false          # jobs are started through the API, not at startup
+    jdbc:
+      initialize-schema: embedded   # creates Spring Batch tables in the in-memory H2 DB
+  # No datasource configured: Spring Boot starts an in-memory H2 database (local/dev/test).
+  # Run-history is lost on restart; use the "oracle" profile for persistence.
+
+mdp:
+  input-dir: ${MDP_INPUT_DIR:sample-data/input}
+  output-dir: ${MDP_OUTPUT_DIR:output}
+  chunk-size: 1000
+  skip-limit: 100
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [run=%X{runId:-} job=%X{jobName:-} date=%X{businessDate:-}] %logger{30} - %msg%n"
