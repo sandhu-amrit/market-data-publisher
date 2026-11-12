@@ -1,0 +1,32 @@
+# Production. Secrets come from the environment (or a Vault agent / spring.config.import=vault://).
+# No defaults for credentials. Connection profiles and their enabled flags live in application.yml;
+# set MDP_SFTP_VENDOR_A_ENABLED, MDP_SFTP_INTERNAL_ENABLED, MDP_KAFKA_ENABLED, MDP_REST_ENABLED.
+mdp:
+  security:
+    mode: jwt
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${MDP_JWT_ISSUER}
+  datasource:
+    url: ${MDP_DB_URL}
+    username: ${MDP_DB_USER}
+    password: ${MDP_DB_PASSWORD}
+    driver-class-name: oracle.jdbc.OracleDriver
+    hikari:
+      maximum-pool-size: 5
+  batch:
+    jdbc:
+      initialize-schema: ${MDP_BATCH_SCHEMA_INIT:never}
+      isolation-level-for-create: read_committed
+
+management:
+  endpoint:
+    health:
+      show-details: never
+  tracing:
+    sampling:
+      probability: ${MDP_TRACING_PROBABILITY:0.1}

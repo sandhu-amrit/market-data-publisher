@@ -1,16 +1,16 @@
 package com.praxis.mdp.source;
 
-import com.praxis.mdp.model.InstrumentType;
-import com.praxis.mdp.model.MarketDataRecord;
+import com.praxis.mdp.domain.InstrumentType;
+import com.praxis.mdp.domain.MarketDataRecord;
 import java.time.LocalDate;
 import org.springframework.batch.item.ItemStreamReader;
 
 /**
- * Where market data comes from. v1 reads CSV files ({@link FileMarketDataSource}); a real Asset Control
- * implementation can be added later without touching jobs.
+ * Where a full end-of-day snapshot comes from. {@code fetchSize} is the page size for adapters that
+ * read in pages. The file adapter reads the whole file.
  */
 public interface MarketDataSource {
 
-    /** Creates a reader for the full snapshot of one instrument type on one business date. */
-    ItemStreamReader<MarketDataRecord> reader(InstrumentType type, LocalDate businessDate);
+  ItemStreamReader<MarketDataRecord> reader(
+      InstrumentType type, LocalDate businessDate, int fetchSize);
 }

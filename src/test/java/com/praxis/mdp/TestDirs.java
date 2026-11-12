@@ -5,18 +5,17 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-final class TestDirs {
+public final class TestDirs {
 
-    private TestDirs() {
-    }
+  private TestDirs() {}
 
-    static Path newTempDir(String prefix) {
-        try {
-            Path dir = Files.createTempDirectory(prefix);
-            dir.toFile().deleteOnExit();
-            return dir;
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+  public static Path newTempDir(String prefix) {
+    try {
+      Path dir = Files.createTempDirectory(prefix);
+      dir.toFile().deleteOnExit();
+      return dir;
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
     }
+  }
 }

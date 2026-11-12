@@ -1,29 +1,121 @@
+# Defaults are safe to boot on a workstation (H2, file sink, permit-all security).
+# Production must set --spring.profiles.active=prod. See application-local.yml and the README.
 spring:
   application:
     name: market-data-publisher
+  profiles:
+    default: local
   mvc:
     problemdetails:
       enabled: true
   batch:
     job:
-      enabled: false          # jobs are started through the API, not at startup
+      enabled: false
     jdbc:
-      initialize-schema: embedded   # creates Spring Batch tables in the in-memory H2 DB
-  # No datasource configured: Spring Boot starts an in-memory H2 database (local/dev/test).
-  # Run-history is lost on restart; use the "oracle" profile for persistence.
+      initialize-schema: embedded
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+server:
+  shutdown: graceful
 
 mdp:
-  input-dir: ${MDP_INPUT_DIR:sample-data/input}
   output-dir: ${MDP_OUTPUT_DIR:output}
-  chunk-size: 1000
-  skip-limit: 100
+  work-dir: ${MDP_WORK_DIR:work}
+  schedule-zone: ${MDP_SCHEDULE_ZONE:}
+  security:
+    mode: permit-all
+  batch:
+    defaults:
+      chunk-size: 1000
+      threads: 1
+      skip-limit: 100
+      retry-limit: 0
+      fetch-size: 1000
+  connections:
+    source:
+      asset-control:
+        input-dir: ${MDP_INPUT_DIR:sample-data/input}
+        file-pattern: "{type}_{businessDate}.csv"
+    sftp:
+      vendor-a:
+        host: ${MDP_SFTP_VENDOR_A_HOST:sftp-vendor-a}
+        port: ${MDP_SFTP_VENDOR_A_PORT:22}
+        username: ${MDP_SFTP_VENDOR_A_USER:mdp}
+        password: ${MDP_SFTP_VENDOR_A_PASSWORD:}
+        private-key: ${MDP_SFTP_VENDOR_A_KEY:}
+        known-hosts: ${MDP_SFTP_VENDOR_A_KNOWN_HOSTS:}
+        allow-unknown-keys: false
+        enabled: ${MDP_SFTP_VENDOR_A_ENABLED:false}
+      internal:
+        host: ${MDP_SFTP_INTERNAL_HOST:sftp-internal}
+        port: ${MDP_SFTP_INTERNAL_PORT:22}
+        username: ${MDP_SFTP_INTERNAL_USER:mdp}
+        password: ${MDP_SFTP_INTERNAL_PASSWORD:}
+        private-key: ${MDP_SFTP_INTERNAL_KEY:}
+        known-hosts: ${MDP_SFTP_INTERNAL_KNOWN_HOSTS:}
+        allow-unknown-keys: false
+        enabled: ${MDP_SFTP_INTERNAL_ENABLED:false}
+    kafka:
+      main:
+        bootstrap-servers: ${MDP_KAFKA_BOOTSTRAP:localhost:9092}
+        security-protocol: ${MDP_KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
+        truststore-location: ${MDP_KAFKA_TRUSTSTORE:}
+        truststore-password: ${MDP_KAFKA_TRUSTSTORE_PASSWORD:}
+        client-id: market-data-publisher
+        enabled: ${MDP_KAFKA_ENABLED:false}
+    rest:
+      risk-api:
+        base-url: ${MDP_REST_URL:http://localhost:8081}
+        auth: ${MDP_REST_AUTH:none}
+        client-id: ${MDP_REST_CLIENT_ID:}
+        client-secret: ${MDP_REST_CLIENT_SECRET:}
+        token-uri: ${MDP_REST_TOKEN_URI:}
+        enabled: ${MDP_REST_ENABLED:false}
+  jobs:
+    fxFuturesEodJob:
+      enabled: true
+      schedule: "0 0 16 * * MON-FRI"
+      batch:
+        chunk-size: 2000
+        threads: 4
+    fxForwardsEodJob:
+      enabled: true
+      schedule: "0 0 17 * * MON-FRI"
+    cmeFuturesEodJob:
+      enabled: true
+      schedule: none
+      batch:
+        threads: 3
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+  tracing:
+    sampling:
+      probability: ${MDP_TRACING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+      export:
+        enabled: ${OTEL_EXPORT_ENABLED:false}
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 logging:
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [run=%X{runId:-} job=%X{jobName:-} date=%X{businessDate:-}] %logger{30} - %msg%n"
+  structured:
+    format:
+      console: ecs
+
+info:
+  app:
+    name: market-data-publisher
+    description: End-of-day market data publisher

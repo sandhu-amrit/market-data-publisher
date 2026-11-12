@@ -1,0 +1,3 @@
+instrumentId,instrumentType,symbol,currency,maturityDate,closePrice
+FXW-0001,FX_FORWARD,EURUSD,USD,2026-12-16,1.0850
+FXW-0002,FX_FORWARD,GBPUSD,USD,2026-12-16,1.2640

@@ -1,8 +1,8 @@
-# Activate with: --spring.profiles.active=oracle
-# All connection values come from environment variables (never commit credentials).
+# Oracle connection only. Combine with dev or prod for JWT, for example: --spring.profiles.active=oracle,prod
+# Spring Batch metadata tables are NOT created here. See docs/batch-schema.md.
 spring:
   datasource:
-    url: ${MDP_DB_URL}            # e.g. jdbc:oracle:thin:@//dbhost:1521/MDPSVC
+    url: ${MDP_DB_URL}
     username: ${MDP_DB_USER}
     password: ${MDP_DB_PASSWORD}
     driver-class-name: oracle.jdbc.OracleDriver
@@ -10,9 +10,5 @@ spring:
       maximum-pool-size: 5
   batch:
     jdbc:
-      # Spring Batch tables are created once by a DBA/migration using the script shipped in spring-batch-core:
-      #   org/springframework/batch/core/schema-oracle.sql
-      # Set to "always" only for the very first start against an empty schema.
-      initialize-schema: never
-      # Avoids ORA-08177 ("can't serialize access") when several runs start concurrently.
+      initialize-schema: ${MDP_BATCH_SCHEMA_INIT:never}
       isolation-level-for-create: read_committed

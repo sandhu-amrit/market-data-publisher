@@ -1,0 +1,21 @@
+[Unit]
+Description=Market Data Publisher
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mdp
+Group=mdp
+WorkingDirectory=/opt/mdp
+EnvironmentFile=/etc/mdp/mdp.env
+ExecStart=/usr/bin/java -jar /opt/mdp/market-data-publisher.jar
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=40
+KillSignal=SIGTERM
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
