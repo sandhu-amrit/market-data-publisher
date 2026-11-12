@@ -2,8 +2,9 @@ package com.praxis.mdp.publishing.internal.sftp;
 
 import com.praxis.mdp.domain.InstrumentType;
 import com.praxis.mdp.domain.RunId;
-import com.praxis.mdp.infrastructure.config.MdpProperties;
+import com.praxis.mdp.infrastructure.config.Connections.SftpConnection;
 import com.praxis.mdp.publishing.MarketDataSink;
+import com.praxis.mdp.publishing.OutputNames;
 import com.praxis.mdp.publishing.SinkWriter;
 import com.praxis.mdp.publishing.internal.file.LocalCsvWriter;
 import java.io.IOException;
@@ -11,40 +12,51 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import org.springframework.integration.sftp.session.DefaultSftpSessionFactory;
 import org.springframework.integration.sftp.session.SftpSession;
 
 /** Stages a CSV locally, uploads it as {@code *.tmp}, then renames it on the server. */
 public class SftpMarketDataSink implements MarketDataSink {
 
-  private final MdpProperties.Sftp config;
-  private final Path localDir;
-  private final DefaultSftpSessionFactory sessions;
+  private final SftpConnection connection;
+  private final Path workDir;
+  private final String remoteDir;
+  private final String filePattern;
+  private final SftpSessions sessions;
 
-  public SftpMarketDataSink(MdpProperties props) {
-    this.config = props.getDestinations().getSftp();
-    this.localDir = props.getWorkDir().resolve("sftp");
-    this.sessions = new DefaultSftpSessionFactory();
-    sessions.setHost(config.getHost());
-    sessions.setPort(config.getPort());
-    sessions.setUser(config.getUsername());
-    sessions.setPassword(config.getPassword());
-    sessions.setAllowUnknownKeys(config.isAllowUnknownKeys());
-    sessions.setTimeout((int) config.getTimeout().toMillis());
+  public SftpMarketDataSink(
+      SftpConnection connection, Path workDir, String remoteDir, String filePattern) {
+    this(connection, workDir, remoteDir, filePattern, new SftpSessions());
+  }
+
+  public SftpMarketDataSink(
+      SftpConnection connection,
+      Path workDir,
+      String remoteDir,
+      String filePattern,
+      SftpSessions sessions) {
+    this.connection = connection;
+    this.workDir = workDir;
+    this.remoteDir = remoteDir;
+    this.filePattern = filePattern;
+    this.sessions = sessions;
   }
 
   @Override
   public SinkWriter open(String jobName, InstrumentType type, RunId runId) {
-    String fileName = type.name() + "_EOD_" + runId.businessDate() + ".csv";
-    Path local = localDir.resolve(jobName).resolve("seq-" + runId.runSequence()).resolve(fileName);
+    String fileName = OutputNames.apply(filePattern, jobName, type, runId);
+    Path local =
+        workDir
+            .resolve("sftp")
+            .resolve(jobName)
+            .resolve("seq-" + runId.runSequence())
+            .resolve(fileName);
     return new LocalCsvWriter(local, (temp, target) -> upload(temp, fileName));
   }
 
   private void upload(Path temp, String fileName) throws IOException {
-    String remoteDir = config.getRemoteDirectory();
+    SftpSession session = sessions.get(connection).getSession();
     String remoteFinal = join(remoteDir, fileName);
     String remoteTemp = remoteFinal + ".tmp";
-    SftpSession session = sessions.getSession();
     try {
       ensureDirectory(session, remoteDir);
       if (session.exists(remoteTemp)) {

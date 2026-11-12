@@ -11,4 +11,4 @@ Suggested pod settings:
 - Profile: `SPRING_PROFILES_ACTIVE=prod`.
 - One container, no sidecar required. An OpenTelemetry collector is optional: set `OTEL_EXPORT_ENABLED=true` and `OTEL_EXPORTER_OTLP_ENDPOINT`.
 
-Autosys or Airflow stays outside the cluster and calls `POST /api/v1/runs` with an `MDP_OPERATOR` token. The in-process cron is optional and should be disabled (`mdp.jobs.<name>.schedule-enabled=false`) when an external scheduler owns the calendar, so the job is not triggered twice.
+Autosys or Airflow stays outside the cluster and calls `POST /api/v1/runs` with an `MDP_OPERATOR` token. The in-process cron is optional and should be disabled (`mdp.jobs.<name>.enabled=false` or `schedule: none`) when an external scheduler owns the calendar, so the job is not triggered twice.

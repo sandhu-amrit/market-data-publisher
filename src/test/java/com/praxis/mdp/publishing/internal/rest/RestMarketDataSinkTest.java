@@ -15,10 +15,9 @@ import com.praxis.mdp.domain.Instrument;
 import com.praxis.mdp.domain.InstrumentType;
 import com.praxis.mdp.domain.MarketDataRecord;
 import com.praxis.mdp.domain.RunId;
-import com.praxis.mdp.infrastructure.config.MdpProperties;
+import com.praxis.mdp.infrastructure.config.Connections.RestConnection;
 import com.praxis.mdp.publishing.SinkWriter;
 import java.math.BigDecimal;
-import java.net.URI;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
@@ -86,17 +85,22 @@ class RestMarketDataSinkTest {
   }
 
   private RestMarketDataSink sink(int attempts, int window, int minimum) {
-    MdpProperties props = new MdpProperties();
-    MdpProperties.Rest rest = props.getDestinations().getRest();
-    rest.setEnabled(true);
-    rest.setBaseUrl(URI.create(server.baseUrl()));
-    rest.setPath("/api/eod");
-    rest.setRetryAttempts(attempts);
-    rest.setRetryWait(Duration.ofMillis(10));
-    rest.setCircuitBreakerSlidingWindow(window);
-    rest.setCircuitBreakerMinimumCalls(minimum);
-    rest.setCircuitBreakerFailureRate(50);
-    return new RestMarketDataSink(props);
+    RestConnection rest =
+        new RestConnection(
+            server.baseUrl(),
+            "none",
+            "",
+            "",
+            "",
+            Duration.ofSeconds(2),
+            Duration.ofSeconds(10),
+            attempts,
+            Duration.ofMillis(10),
+            50f,
+            window,
+            minimum,
+            true);
+    return new RestMarketDataSink(rest, "/api/eod");
   }
 
   private static MarketDataRecord sample() {

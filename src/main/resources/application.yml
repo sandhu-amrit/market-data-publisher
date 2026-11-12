@@ -20,47 +20,73 @@ server:
   shutdown: graceful
 
 mdp:
-  input-dir: ${MDP_INPUT_DIR:sample-data/input}
   output-dir: ${MDP_OUTPUT_DIR:output}
   work-dir: ${MDP_WORK_DIR:work}
-  chunk-size: 1000
-  skip-limit: 100
   schedule-zone: ${MDP_SCHEDULE_ZONE:}
   security:
     mode: permit-all
-  destinations:
-    file:
-      enabled: true
+  batch:
+    defaults:
+      chunk-size: 1000
+      threads: 1
+      skip-limit: 100
+      retry-limit: 0
+      fetch-size: 1000
+  connections:
+    source:
+      asset-control:
+        input-dir: ${MDP_INPUT_DIR:sample-data/input}
+        file-pattern: "{type}_{businessDate}.csv"
     sftp:
-      enabled: false
-      host: ${MDP_SFTP_HOST:localhost}
-      port: ${MDP_SFTP_PORT:22}
-      username: ${MDP_SFTP_USER:mdp}
-      password: ${MDP_SFTP_PASSWORD:}
-      remote-directory: ${MDP_SFTP_DIR:upload}
-      allow-unknown-keys: false
+      vendor-a:
+        host: ${MDP_SFTP_VENDOR_A_HOST:sftp-vendor-a}
+        port: ${MDP_SFTP_VENDOR_A_PORT:22}
+        username: ${MDP_SFTP_VENDOR_A_USER:mdp}
+        password: ${MDP_SFTP_VENDOR_A_PASSWORD:}
+        private-key: ${MDP_SFTP_VENDOR_A_KEY:}
+        known-hosts: ${MDP_SFTP_VENDOR_A_KNOWN_HOSTS:}
+        allow-unknown-keys: false
+        enabled: ${MDP_SFTP_VENDOR_A_ENABLED:false}
+      internal:
+        host: ${MDP_SFTP_INTERNAL_HOST:sftp-internal}
+        port: ${MDP_SFTP_INTERNAL_PORT:22}
+        username: ${MDP_SFTP_INTERNAL_USER:mdp}
+        password: ${MDP_SFTP_INTERNAL_PASSWORD:}
+        private-key: ${MDP_SFTP_INTERNAL_KEY:}
+        known-hosts: ${MDP_SFTP_INTERNAL_KNOWN_HOSTS:}
+        allow-unknown-keys: false
+        enabled: ${MDP_SFTP_INTERNAL_ENABLED:false}
     kafka:
-      enabled: false
-      bootstrap-servers: ${MDP_KAFKA_BOOTSTRAP:localhost:9092}
-      topic: ${MDP_KAFKA_TOPIC:mdp.eod}
+      main:
+        bootstrap-servers: ${MDP_KAFKA_BOOTSTRAP:localhost:9092}
+        security-protocol: ${MDP_KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
+        truststore-location: ${MDP_KAFKA_TRUSTSTORE:}
+        truststore-password: ${MDP_KAFKA_TRUSTSTORE_PASSWORD:}
+        client-id: market-data-publisher
+        enabled: ${MDP_KAFKA_ENABLED:false}
     rest:
-      enabled: false
-      base-url: ${MDP_REST_URL:http://localhost:8081}
-      path: ${MDP_REST_PATH:/api/eod}
-      bearer-token: ${MDP_REST_TOKEN:}
+      risk-api:
+        base-url: ${MDP_REST_URL:http://localhost:8081}
+        auth: ${MDP_REST_AUTH:none}
+        client-id: ${MDP_REST_CLIENT_ID:}
+        client-secret: ${MDP_REST_CLIENT_SECRET:}
+        token-uri: ${MDP_REST_TOKEN_URI:}
+        enabled: ${MDP_REST_ENABLED:false}
   jobs:
     fxFuturesEodJob:
-      cron: "0 0 16 * * MON-FRI"
-      schedule-enabled: true
-      failure-policy: FAIL_FAST
-      missing-price-policy: SKIP_AND_ALERT
+      enabled: true
+      schedule: "0 0 16 * * MON-FRI"
+      batch:
+        chunk-size: 2000
+        threads: 4
     fxForwardsEodJob:
-      cron: "0 0 17 * * MON-FRI"
-      schedule-enabled: true
-      failure-policy: FAIL_FAST
-      missing-price-policy: SKIP_AND_ALERT
+      enabled: true
+      schedule: "0 0 17 * * MON-FRI"
     cmeFuturesEodJob:
-      schedule-enabled: false
+      enabled: true
+      schedule: none
+      batch:
+        threads: 3
 
 management:
   endpoints:

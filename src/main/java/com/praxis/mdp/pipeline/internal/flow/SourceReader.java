@@ -15,16 +15,20 @@ final class SourceReader implements ItemStreamReader<MarketDataRecord>, StepExec
 
   private final MarketDataSource source;
   private final InstrumentType type;
+  private final int fetchSize;
   private ItemStreamReader<MarketDataRecord> delegate;
 
-  SourceReader(MarketDataSource source, InstrumentType type) {
+  SourceReader(MarketDataSource source, InstrumentType type, int fetchSize) {
     this.source = source;
     this.type = type;
+    this.fetchSize = fetchSize;
   }
 
   @Override
   public void beforeStep(StepExecution stepExecution) {
-    delegate = source.reader(type, RunParameters.businessDate(stepExecution.getJobParameters()));
+    delegate =
+        source.reader(
+            type, RunParameters.businessDate(stepExecution.getJobParameters()), fetchSize);
   }
 
   @Override

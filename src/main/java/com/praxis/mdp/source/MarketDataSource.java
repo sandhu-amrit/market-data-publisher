@@ -6,11 +6,11 @@ import java.time.LocalDate;
 import org.springframework.batch.item.ItemStreamReader;
 
 /**
- * Where a full end-of-day snapshot comes from. The file adapter is the default; an Asset Control
- * adapter can replace it without changing jobs.
+ * Where a full end-of-day snapshot comes from. {@code fetchSize} is the page size for adapters that
+ * read in pages. The file adapter reads the whole file.
  */
 public interface MarketDataSource {
 
-  /** Reader over the full snapshot of one instrument type on one business date. */
-  ItemStreamReader<MarketDataRecord> reader(InstrumentType type, LocalDate businessDate);
+  ItemStreamReader<MarketDataRecord> reader(
+      InstrumentType type, LocalDate businessDate, int fetchSize);
 }

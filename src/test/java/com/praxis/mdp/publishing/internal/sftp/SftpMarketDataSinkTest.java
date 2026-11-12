@@ -8,11 +8,11 @@ import com.praxis.mdp.domain.Instrument;
 import com.praxis.mdp.domain.InstrumentType;
 import com.praxis.mdp.domain.MarketDataRecord;
 import com.praxis.mdp.domain.RunId;
-import com.praxis.mdp.infrastructure.config.MdpProperties;
+import com.praxis.mdp.infrastructure.config.Connections.SftpConnection;
 import com.praxis.mdp.publishing.SinkWriter;
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
-import java.time.Duration;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -37,19 +37,12 @@ class SftpMarketDataSinkTest {
             .withExposedPorts(22)
             .waitingFor(Wait.forListeningPort())) {
       sftp.start();
-      MdpProperties props = new MdpProperties();
-      props.setWorkDir(TestDirs.newTempDir("mdp-sftp-work"));
-      MdpProperties.Sftp cfg = props.getDestinations().getSftp();
-      cfg.setEnabled(true);
-      cfg.setHost(sftp.getHost());
-      cfg.setPort(sftp.getMappedPort(22));
-      cfg.setUsername("mdp");
-      cfg.setPassword("mdp");
-      cfg.setRemoteDirectory("upload");
-      cfg.setAllowUnknownKeys(true);
-      cfg.setTimeout(Duration.ofSeconds(15));
+      Path work = TestDirs.newTempDir("mdp-sftp-work");
+      SftpConnection cfg =
+          SftpConnection.open(sftp.getHost(), sftp.getMappedPort(22), "mdp", "mdp", true, true);
 
-      SftpMarketDataSink sink = new SftpMarketDataSink(props);
+      SftpMarketDataSink sink =
+          new SftpMarketDataSink(cfg, work, "upload", "{type}_EOD_{businessDate}.csv");
       MarketDataRecord record =
           new MarketDataRecord(
               new Instrument(
@@ -65,8 +58,8 @@ class SftpMarketDataSinkTest {
       writer.finish(true);
 
       DefaultSftpSessionFactory sessions = new DefaultSftpSessionFactory();
-      sessions.setHost(cfg.getHost());
-      sessions.setPort(cfg.getPort());
+      sessions.setHost(cfg.host());
+      sessions.setPort(cfg.port());
       sessions.setUser("mdp");
       sessions.setPassword("mdp");
       sessions.setAllowUnknownKeys(true);

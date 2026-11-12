@@ -6,7 +6,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.praxis.mdp.domain.InstrumentType;
 import com.praxis.mdp.domain.MarketDataRecord;
 import com.praxis.mdp.domain.RunId;
-import com.praxis.mdp.infrastructure.config.MdpProperties;
+import com.praxis.mdp.infrastructure.config.Connections.RestConnection;
 import com.praxis.mdp.publishing.MarketDataSink;
 import com.praxis.mdp.publishing.SinkWriter;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
@@ -40,15 +40,14 @@ public class RestMarketDataSink implements MarketDataSink {
   private final Retry retry;
   private final CircuitBreaker circuitBreaker;
 
-  public RestMarketDataSink(MdpProperties props) {
-    MdpProperties.Rest rest = props.getDestinations().getRest();
+  public RestMarketDataSink(RestConnection rest, String path) {
     HttpClient http =
         HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_1_1)
-            .connectTimeout(rest.getConnectTimeout())
+            .connectTimeout(rest.connectTimeout())
             .build();
     JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(http);
-    factory.setReadTimeout(rest.getReadTimeout());
+    factory.setReadTimeout(rest.readTimeout());
     ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
     mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     RestClient.Builder builder =
@@ -59,32 +58,66 @@ public class RestMarketDataSink implements MarketDataSink {
                   converters.removeIf(MappingJackson2HttpMessageConverter.class::isInstance);
                   converters.add(new MappingJackson2HttpMessageConverter(mapper));
                 })
-            .baseUrl(rest.getBaseUrl().toString());
-    if (rest.getBearerToken() != null && !rest.getBearerToken().isBlank()) {
-      builder.defaultHeader("Authorization", "Bearer " + rest.getBearerToken());
-    }
+            .baseUrl(rest.baseUrl());
+    applyAuth(builder, rest);
     this.client = builder.build();
-    this.path = rest.getPath();
+    this.path = path;
     this.retry =
         Retry.of(
-            "mdpRestSink",
+            "mdpRestSink-" + rest.baseUrl(),
             RetryConfig.custom()
-                .maxAttempts(Math.max(1, rest.getRetryAttempts()))
-                .waitDuration(
-                    rest.getRetryWait() == null ? Duration.ofMillis(200) : rest.getRetryWait())
+                .maxAttempts(Math.max(1, rest.retryAttempts()))
+                .waitDuration(rest.retryWait())
                 .retryExceptions(HttpServerErrorException.class, ResourceAccessException.class)
                 .ignoreExceptions(CallNotPermittedException.class)
                 .build());
     this.circuitBreaker =
         CircuitBreaker.of(
-            "mdpRestSink",
+            "mdpRestSink-" + rest.baseUrl(),
             CircuitBreakerConfig.custom()
-                .failureRateThreshold(rest.getCircuitBreakerFailureRate())
-                .slidingWindowSize(Math.max(1, rest.getCircuitBreakerSlidingWindow()))
-                .minimumNumberOfCalls(Math.max(1, rest.getCircuitBreakerMinimumCalls()))
+                .failureRateThreshold(rest.circuitBreakerFailureRate())
+                .slidingWindowSize(Math.max(1, rest.circuitBreakerSlidingWindow()))
+                .minimumNumberOfCalls(Math.max(1, rest.circuitBreakerMinimumCalls()))
                 .waitDurationInOpenState(Duration.ofSeconds(30))
                 .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
                 .build());
+  }
+
+  private static void applyAuth(RestClient.Builder builder, RestConnection rest) {
+    if (rest.auth() == null || rest.auth().isBlank() || "none".equalsIgnoreCase(rest.auth())) {
+      return;
+    }
+    if ("basic".equalsIgnoreCase(rest.auth())) {
+      builder.defaultHeaders(headers -> headers.setBasicAuth(rest.clientId(), rest.clientSecret()));
+      return;
+    }
+    if ("client-credentials".equalsIgnoreCase(rest.auth()) && !rest.tokenUri().isBlank()) {
+      builder.defaultHeaders(headers -> headers.setBearerAuth(clientCredentialsToken(rest)));
+    }
+  }
+
+  private static String clientCredentialsToken(RestConnection rest) {
+    String body =
+        "grant_type=client_credentials&client_id="
+            + rest.clientId()
+            + "&client_secret="
+            + rest.clientSecret();
+    String json =
+        RestClient.builder()
+            .baseUrl(rest.tokenUri())
+            .build()
+            .post()
+            .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+            .body(body)
+            .retrieve()
+            .body(String.class);
+    int marker = json == null ? -1 : json.indexOf("\"access_token\"");
+    if (marker < 0) {
+      throw new IllegalStateException("Token endpoint did not return an access_token");
+    }
+    int start = json.indexOf('"', json.indexOf(':', marker) + 1) + 1;
+    int end = json.indexOf('"', start);
+    return json.substring(start, end);
   }
 
   @Override

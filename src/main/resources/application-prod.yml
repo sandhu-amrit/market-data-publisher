@@ -1,4 +1,6 @@
-# Production. Secrets come from the environment (or a Vault agent that injects them). No defaults for credentials.
+# Production. Secrets come from the environment (or a Vault agent / spring.config.import=vault://).
+# No defaults for credentials. Connection profiles and their enabled flags live in application.yml;
+# set MDP_SFTP_VENDOR_A_ENABLED, MDP_SFTP_INTERNAL_ENABLED, MDP_KAFKA_ENABLED, MDP_REST_ENABLED.
 mdp:
   security:
     mode: jwt

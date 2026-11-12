@@ -2,8 +2,9 @@ package com.praxis.mdp.pipeline.internal.flow;
 
 import com.praxis.mdp.domain.MarketDataRecord;
 import com.praxis.mdp.domain.policy.FailurePolicy;
-import com.praxis.mdp.infrastructure.config.MdpProperties;
+import com.praxis.mdp.pipeline.BatchSettings;
 import com.praxis.mdp.pipeline.JobDefinition;
+import com.praxis.mdp.pipeline.JobRuntime;
 import com.praxis.mdp.pipeline.internal.extract.SnapshotStore;
 import com.praxis.mdp.pipeline.internal.listener.MetricsStepListener;
 import com.praxis.mdp.pipeline.internal.listener.RunLoggingListener;
@@ -12,10 +13,10 @@ import com.praxis.mdp.pipeline.internal.transform.CsvSerializer;
 import com.praxis.mdp.pipeline.internal.transform.Transformer;
 import com.praxis.mdp.pipeline.internal.validate.MarketDataValidator;
 import com.praxis.mdp.pipeline.internal.validate.MdpSkipPolicy;
-import com.praxis.mdp.publishing.Destination;
-import com.praxis.mdp.source.MarketDataSource;
+import com.praxis.mdp.publishing.Publication;
+import com.praxis.mdp.publishing.PublishingClients;
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,12 +33,13 @@ import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.web.client.ResourceAccessException;
 
 /**
  * Extract once into a staging snapshot, then one publish step per enabled destination. {@link
- * FailurePolicy#FAIL_FAST} stops at the first destination failure. {@link FailurePolicy#CONTINUE}
- * runs every destination and fails the job afterwards if any of them failed. Restart re-executes
- * failed steps and skips completed ones.
+ * FailurePolicy#FAIL_FAST} stops at the first destination failure. {@link
+ * FailurePolicy#CONTINUE_OTHER_DESTINATIONS} runs every destination and fails the job afterwards if
+ * any of them failed. Restart re-executes failed steps and skips completed ones.
  */
 @Component
 public class EodJobFactory {
@@ -49,84 +51,88 @@ public class EodJobFactory {
 
   private final JobRepository jobRepository;
   private final PlatformTransactionManager txManager;
-  private final MarketDataSource source;
   private final SnapshotStore snapshots;
   private final CsvSerializer serializer;
   private final Transformer transformer;
-  private final List<Destination> destinations;
+  private final PublishingClients clients;
+  private final JobRuntime runtime;
   private final RunLoggingListener runLoggingListener;
   private final SkipLoggingListener skipLoggingListener;
   private final MetricsStepListener metricsStepListener;
-  private final MdpProperties props;
 
   public EodJobFactory(
       JobRepository jobRepository,
       PlatformTransactionManager txManager,
-      MarketDataSource source,
       SnapshotStore snapshots,
       CsvSerializer serializer,
       Transformer transformer,
-      List<Destination> destinations,
+      PublishingClients clients,
+      JobRuntime runtime,
       RunLoggingListener runLoggingListener,
       SkipLoggingListener skipLoggingListener,
-      MetricsStepListener metricsStepListener,
-      MdpProperties props) {
+      MetricsStepListener metricsStepListener) {
     this.jobRepository = jobRepository;
     this.txManager = txManager;
-    this.source = source;
     this.snapshots = snapshots;
     this.serializer = serializer;
     this.transformer = transformer;
-    this.destinations = destinations;
+    this.clients = clients;
+    this.runtime = runtime;
     this.runLoggingListener = runLoggingListener;
     this.skipLoggingListener = skipLoggingListener;
     this.metricsStepListener = metricsStepListener;
-    this.props = props;
   }
 
   public Job create(JobDefinition def) {
-    Step extract = extractStep(def);
-    List<Destination> selected = select(def);
+    BatchSettings batch = runtime.batch(def.name());
+    Step extract = extractStep(def, batch);
+    List<Publication> selected = def.publications().stream().filter(Publication::active).toList();
     List<Step> publish = new ArrayList<>();
-    for (Destination destination : selected) {
-      publish.add(publishStep(def, destination));
+    for (Publication publication : selected) {
+      publish.add(publishStep(def, publication, batch));
     }
     log.info(
-        "Job {} instrument={} failurePolicy={} missingPricePolicy={} schedule={} cron='{}' destinations={}",
+        "Job {} instrument={} failurePolicy={} missingPrices={} chunkSize={} threads={} destinations={}",
         def.name(),
         def.instrumentType(),
-        def.failurePolicy(),
-        def.missingPricePolicy(),
-        def.scheduleEnabled(),
-        def.cron(),
-        selected.stream().map(Destination::name).toList());
-    if (def.failurePolicy() == FailurePolicy.CONTINUE && !publish.isEmpty()) {
+        def.onFailure(),
+        def.missingPrices(),
+        batch.chunkSize(),
+        batch.threads(),
+        selected.stream().map(Publication::stepName).toList());
+    if (def.onFailure() == FailurePolicy.CONTINUE_OTHER_DESTINATIONS && !publish.isEmpty()) {
       return continueJob(def, extract, publish);
     }
     return failFastJob(def, extract, publish);
   }
 
-  private Step extractStep(JobDefinition def) {
-    SourceReader reader = new SourceReader(source, def.instrumentType());
+  private Step extractStep(JobDefinition def, BatchSettings batch) {
+    SourceReader reader = new SourceReader(def.source(), def.instrumentType(), batch.fetchSize());
     StagingWriter writer = new StagingWriter(snapshots, def.name());
-    return new StepBuilder(EXTRACT_STEP, jobRepository)
-        .<MarketDataRecord, MarketDataRecord>chunk(props.getChunkSize(), txManager)
-        .reader(reader)
-        .processor(new MarketDataValidator(def.instrumentType()))
-        .writer(writer)
-        .faultTolerant()
-        .skipPolicy(new MdpSkipPolicy(def.missingPricePolicy(), props.getSkipLimit()))
-        .listener(skipLoggingListener)
-        .listener(metricsStepListener)
-        .build();
+    var builder =
+        new StepBuilder(EXTRACT_STEP, jobRepository)
+            .<MarketDataRecord, MarketDataRecord>chunk(batch.chunkSize(), txManager)
+            .reader(reader)
+            .processor(new MarketDataValidator(def.instrumentType()))
+            .writer(writer)
+            .faultTolerant()
+            .skipPolicy(new MdpSkipPolicy(def.missingPrices(), batch.skipLimit()));
+    if (batch.retryLimit() > 0) {
+      builder
+          .retryLimit(batch.retryLimit())
+          .retry(IOException.class)
+          .retry(ResourceAccessException.class);
+    }
+    return builder.listener(skipLoggingListener).listener(metricsStepListener).build();
   }
 
-  private Step publishStep(JobDefinition def, Destination destination) {
-    String stepName = "publish-" + destination.name();
+  private Step publishStep(JobDefinition def, Publication publication, BatchSettings batch) {
+    String stepName = "publish-" + publication.stepName();
     SnapshotReader reader = new SnapshotReader(snapshots, serializer, def.name(), stepName);
-    SinkAdapter writer = new SinkAdapter(destination.sink(), def.name(), def.instrumentType());
+    PublicationWriter writer =
+        new PublicationWriter(publication, clients, def.name(), def.instrumentType());
     return new StepBuilder(stepName, jobRepository)
-        .<MarketDataRecord, MarketDataRecord>chunk(props.getChunkSize(), txManager)
+        .<MarketDataRecord, MarketDataRecord>chunk(batch.chunkSize(), txManager)
         .reader(reader)
         .processor(item -> transformer.transform(item))
         .writer(writer)
@@ -191,29 +197,5 @@ public class EodJobFactory {
         .start(flow.build())
         .end()
         .build();
-  }
-
-  private List<Destination> select(JobDefinition def) {
-    List<Destination> enabled = new ArrayList<>(destinations);
-    enabled.sort(Comparator.comparingInt(Destination::order));
-    if (def.destinations().isEmpty()) {
-      return enabled;
-    }
-    List<Destination> selected = new ArrayList<>();
-    for (String name : def.destinations()) {
-      selected.add(
-          enabled.stream()
-              .filter(destination -> destination.name().equals(name))
-              .findFirst()
-              .orElseThrow(
-                  () ->
-                      new IllegalStateException(
-                          "Job "
-                              + def.name()
-                              + " lists unknown or disabled destination '"
-                              + name
-                              + "'")));
-    }
-    return selected;
   }
 }

@@ -1,4 +1,5 @@
 # Shared non-prod environment. JWT issuer is required. Database defaults to H2 unless MDP_DB_* is set.
+# Hosts, passwords, and enabled flags stay in application.yml as ${ENV} placeholders.
 mdp:
   security:
     mode: jwt

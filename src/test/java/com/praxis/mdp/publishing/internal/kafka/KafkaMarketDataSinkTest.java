@@ -38,14 +38,13 @@ class KafkaMarketDataSinkTest {
     try (KafkaContainer kafka =
         new KafkaContainer(DockerImageName.parse("apache/kafka-native:3.8.1"))) {
       kafka.start();
-      var props =
-          new com.praxis.mdp.infrastructure.config.MdpProperties().getDestinations().getKafka();
-      props.setBootstrapServers(kafka.getBootstrapServers());
-      props.setTopic("mdp.eod");
+      var connection =
+          com.praxis.mdp.infrastructure.config.Connections.KafkaConnection.open(
+              kafka.getBootstrapServers(), true);
       ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule());
       var factory =
           new DefaultKafkaProducerFactory<String, String>(
-              KafkaProducerConfig.producerConfig(props));
+              KafkaProducerConfig.producerConfig(connection));
       KafkaTemplate<String, String> template = new KafkaTemplate<>(factory);
       KafkaMarketDataSink sink = new KafkaMarketDataSink("mdp.eod", template, json);
       MarketDataRecord record =

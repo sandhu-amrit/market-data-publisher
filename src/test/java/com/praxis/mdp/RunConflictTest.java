@@ -1,13 +1,14 @@
 package com.praxis.mdp;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.praxis.mdp.domain.MarketDataRecord;
-import com.praxis.mdp.source.MarketDataSource;
+import com.praxis.mdp.source.AssetControlSource;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -27,13 +28,13 @@ class RunConflictTest {
 
   @Autowired MockMvc mvc;
 
-  @MockitoBean MarketDataSource source;
+  @MockitoBean AssetControlSource source;
 
   @Test
   void duplicateRunIs409AndStopIsAccepted() throws Exception {
     CountDownLatch entered = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);
-    when(source.reader(any(), any()))
+    when(source.reader(any(), any(), anyInt()))
         .thenReturn(
             new ItemStreamReader<MarketDataRecord>() {
               @Override

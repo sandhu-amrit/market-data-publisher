@@ -8,7 +8,6 @@ import com.praxis.mdp.domain.Instrument;
 import com.praxis.mdp.domain.InstrumentType;
 import com.praxis.mdp.domain.MarketDataRecord;
 import com.praxis.mdp.domain.RunId;
-import com.praxis.mdp.infrastructure.config.MdpProperties;
 import com.praxis.mdp.publishing.SinkWriter;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -24,9 +23,7 @@ class FileMarketDataSinkTest {
   @Test
   void renamesAtomicallyOnSuccessAndDeletesTheTempFileOnFailure() throws Exception {
     Path dir = TestDirs.newTempDir("mdp-file-sink");
-    MdpProperties props = new MdpProperties();
-    props.setOutputDir(dir);
-    FileMarketDataSink sink = new FileMarketDataSink(props);
+    FileMarketDataSink sink = new FileMarketDataSink(dir);
     RunId runId = RunId.of(LocalDate.parse("2026-11-11"), 1);
     MarketDataRecord record =
         new MarketDataRecord(

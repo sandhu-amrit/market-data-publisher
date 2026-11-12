@@ -1,15 +1,19 @@
 # Tests must not fire the weekday cron (it would be flaky at 16:00 and 17:00).
 # Profile "test" is activated from application.properties so the local profile stays off.
+# This file overlays src/main/resources/application.yml; it does not replace it.
 mdp:
-  input-dir: src/test/resources/input
   output-dir: target/test-output
   work-dir: target/test-work
   security:
     mode: permit-all
+  connections:
+    source:
+      asset-control:
+        input-dir: src/test/resources/input
   jobs:
     fxFuturesEodJob:
-      schedule-enabled: false
+      enabled: false
     fxForwardsEodJob:
-      schedule-enabled: false
+      enabled: false
     cmeFuturesEodJob:
-      schedule-enabled: false
+      enabled: false

@@ -3,6 +3,8 @@ package com.praxis.mdp.scheduling.internal;
 import com.praxis.mdp.infrastructure.config.MdpProperties;
 import com.praxis.mdp.pipeline.JobCatalog;
 import com.praxis.mdp.pipeline.JobDefinition;
+import com.praxis.mdp.pipeline.JobRuntime;
+import com.praxis.mdp.pipeline.ScheduleSettings;
 import com.praxis.mdp.pipeline.ScheduledRunLauncher;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -24,6 +26,7 @@ public class JobScheduler implements SchedulingConfigurer {
   private static final Logger log = LoggerFactory.getLogger(JobScheduler.class);
 
   private final JobCatalog catalog;
+  private final JobRuntime runtime;
   private final ScheduledRunLauncher launcher;
   private final ClusterLock lock;
   private final Clock clock;
@@ -31,11 +34,13 @@ public class JobScheduler implements SchedulingConfigurer {
 
   public JobScheduler(
       JobCatalog catalog,
+      JobRuntime runtime,
       ScheduledRunLauncher launcher,
       ClusterLock lock,
       Clock clock,
       MdpProperties props) {
     this.catalog = catalog;
+    this.runtime = runtime;
     this.launcher = launcher;
     this.lock = lock;
     this.clock = clock;
@@ -56,16 +61,17 @@ public class JobScheduler implements SchedulingConfigurer {
   public void configureTasks(ScheduledTaskRegistrar registrar) {
     registrar.setScheduler(mdpTaskScheduler());
     for (JobDefinition job : catalog.all()) {
-      if (!job.scheduleEnabled() || job.cron() == null || job.cron().isBlank()) {
+      ScheduleSettings schedule = runtime.schedule(job.name());
+      if (!schedule.scheduled()) {
         log.info("Job {} is on-demand (no schedule)", job.name());
         continue;
       }
       CronTrigger trigger =
           zone.isBlank()
-              ? new CronTrigger(job.cron())
-              : new CronTrigger(job.cron(), ZoneId.of(zone));
+              ? new CronTrigger(schedule.cron())
+              : new CronTrigger(schedule.cron(), ZoneId.of(zone));
       registrar.addTriggerTask(() -> fire(job), trigger);
-      log.info("Scheduled {} with cron '{}'", job.name(), job.cron());
+      log.info("Scheduled {} with cron '{}'", job.name(), schedule.cron());
     }
   }
 

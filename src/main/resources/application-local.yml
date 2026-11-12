@@ -1,4 +1,4 @@
-# Workstation profile. Activated by default from main() via SpringApplication.setDefaultProfiles("local").
+# Workstation profile. The default profile (spring.profiles.default=local).
 # Security is permit-all: every caller is local-operator with MDP_OPERATOR and MDP_VIEWER.
 # Do not use this profile on a shared or production host.
 spring:
@@ -14,12 +14,3 @@ spring:
 mdp:
   security:
     mode: permit-all
-  destinations:
-    file:
-      enabled: true
-    sftp:
-      enabled: false
-    kafka:
-      enabled: false
-    rest:
-      enabled: false

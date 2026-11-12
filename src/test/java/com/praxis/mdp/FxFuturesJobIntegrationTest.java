@@ -42,7 +42,7 @@ class FxFuturesJobIntegrationTest {
   @Autowired JobExplorer explorer;
 
   @Autowired
-  @Qualifier("fxFuturesEodJob")
+  @Qualifier("fxFuturesEodBatchJob")
   Job job;
 
   @Autowired JobRepository jobRepository;
