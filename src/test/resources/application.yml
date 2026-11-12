@@ -1,0 +1,15 @@
+# Tests must not fire the weekday cron (it would be flaky at 16:00 and 17:00).
+# Profile "test" is activated from application.properties so the local profile stays off.
+mdp:
+  input-dir: src/test/resources/input
+  output-dir: target/test-output
+  work-dir: target/test-work
+  security:
+    mode: permit-all
+  jobs:
+    fxFuturesEodJob:
+      schedule-enabled: false
+    fxForwardsEodJob:
+      schedule-enabled: false
+    cmeFuturesEodJob:
+      schedule-enabled: false

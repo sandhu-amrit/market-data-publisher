@@ -1,0 +1,3 @@
+instrumentId,instrumentType,symbol,currency,maturityDate,closePrice
+CME-0001,CME_FUTURE,ESZ6,USD,2026-12-18,5825.50
+CME-0002,CME_FUTURE,NQZ6,USD,2026-12-18,20450.25

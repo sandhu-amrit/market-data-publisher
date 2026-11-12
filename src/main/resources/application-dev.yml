@@ -1,0 +1,19 @@
+# Shared non-prod environment. JWT issuer is required. Database defaults to H2 unless MDP_DB_* is set.
+mdp:
+  security:
+    mode: jwt
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${MDP_JWT_ISSUER}
+  datasource:
+    url: ${MDP_DB_URL:jdbc:h2:mem:mdp;DB_CLOSE_DELAY=-1}
+    username: ${MDP_DB_USER:sa}
+    password: ${MDP_DB_PASSWORD:}
+    driver-class-name: ${MDP_DB_DRIVER:org.h2.Driver}
+  batch:
+    jdbc:
+      initialize-schema: ${MDP_BATCH_SCHEMA_INIT:embedded}

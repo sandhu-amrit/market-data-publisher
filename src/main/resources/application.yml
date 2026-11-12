@@ -1,29 +1,95 @@
+# Defaults are safe to boot on a workstation (H2, file sink, permit-all security).
+# Production must set --spring.profiles.active=prod. See application-local.yml and the README.
 spring:
   application:
     name: market-data-publisher
+  profiles:
+    default: local
   mvc:
     problemdetails:
       enabled: true
   batch:
     job:
-      enabled: false          # jobs are started through the API, not at startup
+      enabled: false
     jdbc:
-      initialize-schema: embedded   # creates Spring Batch tables in the in-memory H2 DB
-  # No datasource configured: Spring Boot starts an in-memory H2 database (local/dev/test).
-  # Run-history is lost on restart; use the "oracle" profile for persistence.
+      initialize-schema: embedded
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+server:
+  shutdown: graceful
 
 mdp:
   input-dir: ${MDP_INPUT_DIR:sample-data/input}
   output-dir: ${MDP_OUTPUT_DIR:output}
+  work-dir: ${MDP_WORK_DIR:work}
   chunk-size: 1000
   skip-limit: 100
+  schedule-zone: ${MDP_SCHEDULE_ZONE:}
+  security:
+    mode: permit-all
+  destinations:
+    file:
+      enabled: true
+    sftp:
+      enabled: false
+      host: ${MDP_SFTP_HOST:localhost}
+      port: ${MDP_SFTP_PORT:22}
+      username: ${MDP_SFTP_USER:mdp}
+      password: ${MDP_SFTP_PASSWORD:}
+      remote-directory: ${MDP_SFTP_DIR:upload}
+      allow-unknown-keys: false
+    kafka:
+      enabled: false
+      bootstrap-servers: ${MDP_KAFKA_BOOTSTRAP:localhost:9092}
+      topic: ${MDP_KAFKA_TOPIC:mdp.eod}
+    rest:
+      enabled: false
+      base-url: ${MDP_REST_URL:http://localhost:8081}
+      path: ${MDP_REST_PATH:/api/eod}
+      bearer-token: ${MDP_REST_TOKEN:}
+  jobs:
+    fxFuturesEodJob:
+      cron: "0 0 16 * * MON-FRI"
+      schedule-enabled: true
+      failure-policy: FAIL_FAST
+      missing-price-policy: SKIP_AND_ALERT
+    fxForwardsEodJob:
+      cron: "0 0 17 * * MON-FRI"
+      schedule-enabled: true
+      failure-policy: FAIL_FAST
+      missing-price-policy: SKIP_AND_ALERT
+    cmeFuturesEodJob:
+      schedule-enabled: false
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+  tracing:
+    sampling:
+      probability: ${MDP_TRACING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+      export:
+        enabled: ${OTEL_EXPORT_ENABLED:false}
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 logging:
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [run=%X{runId:-} job=%X{jobName:-} date=%X{businessDate:-}] %logger{30} - %msg%n"
+  structured:
+    format:
+      console: ecs
+
+info:
+  app:
+    name: market-data-publisher
+    description: End-of-day market data publisher

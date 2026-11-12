@@ -1,0 +1,25 @@
+# Workstation profile. Activated by default from main() via SpringApplication.setDefaultProfiles("local").
+# Security is permit-all: every caller is local-operator with MDP_OPERATOR and MDP_VIEWER.
+# Do not use this profile on a shared or production host.
+spring:
+  datasource:
+    url: jdbc:h2:mem:mdp;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  batch:
+    jdbc:
+      initialize-schema: always
+
+mdp:
+  security:
+    mode: permit-all
+  destinations:
+    file:
+      enabled: true
+    sftp:
+      enabled: false
+    kafka:
+      enabled: false
+    rest:
+      enabled: false
